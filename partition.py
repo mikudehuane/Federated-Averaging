@@ -1,94 +1,107 @@
 import random
 import os.path as osp
+import os
 import pickle as pkl
 from math import floor
 
 from common import *
 import numpy as np
 
+import torchvision
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+from common import *
 
-def partition_data(train_set, test_set, path=osp.join('cache', 'inds.pkl'), overwrite=False, shuffle=True):
+
+def partition_class(train_set, shuffle=True):
     """
-    :param train_set:
-    :param test_set:
-    :param path:
-    :param overwrite:
-    :param shuffle:
-    :return: inds: dict inds['train'][i] data indices in train_set with class i
+    :param shuffle: whether to shuffle data in one class
+    :return: inds inds[i] are data indices with class i
     """
-    if osp.exists(path) and not overwrite:
-        with open(path, 'rb') as f:
-            inds = pkl.load(f)
-            print(f"inds loaded from {path}")
-    else:
-        inds = {'train': [[] for _ in range(NUM_CIFAR10_CLASSES)],
-                'test': [[] for _ in range(NUM_CIFAR10_CLASSES)]}
-        # inds['train'][i]: data indices with class i (train)
-        for i, (fig, label) in enumerate(train_set):
-            inds['train'][label].append(i)
-        for i, (fig, label) in enumerate(test_set):
-            inds['test'][label].append(i)
-        with open(path, 'wb') as f:
-            pkl.dump(inds, f)
-            print(f"inds dumped into {path}")
+    inds = [[] for _ in range(NUM_CIFAR10_CLASSES)]
+
+    for i, (fig, label) in enumerate(train_set):
+        inds[label].append(i)
 
     if shuffle:
-        for inds_i in inds['train']:
-            random.shuffle(inds_i)
-        for inds_i in inds['test']:
+        for inds_i in inds:
             random.shuffle(inds_i)
 
     return inds
 
 
-def partition_group(inds, num_classes1group, verbose=False):
+def partition(raw_data_dir=data_dir, output_data_dir=osp.join('data', 'debug'), num_clients=100, num_samples_base=5, num_samples_clamp_thres=2):
     """
-    partition the inds returned by partition_data further into 10**? groups
-    :param verbose:
-    :param num_classes1group:
-    :param inds:
-    :return: groups contrast shape as inds
+    Each class with num_clients // NUM_CIFAR10_CLASSES clients
+    :param num_clients: should be multiple of 10 (CIFAR10 class number)
+    :param num_samples_base: control the degree of data imbalance, larger means imbalance lower
+    :param num_samples_clamp_thres: control the degree of data imbalance, trivial
     """
-    num_types = NUM_CIFAR10_CLASSES ** num_classes1group
-    num_samples1group1class = {
-        'train': (NUM_CIFAR10_TRAIN // NUM_CIFAR10_CLASSES) //
-                 (num_types * num_classes1group // NUM_CIFAR10_CLASSES),
-        'test': (NUM_CIFAR10_TEST // NUM_CIFAR10_CLASSES) //
-                (num_types * num_classes1group // NUM_CIFAR10_CLASSES)
-    }
+    # parameter check
+    if num_samples_base <= num_samples_clamp_thres:
+        print("num_samples_bas should be larger than num_samples_clamp_thres")
+        raise AssertionError()
+    if num_clients % NUM_CIFAR10_CLASSES != 0:
+        print('num_clients should be a multiple of NUM_CIFAR10_CLASSES')
+        raise AssertionError() 
+    if osp.exists(output_data_dir):
+        print('Output data directory exists!')
+        raise AssertionError()
+    else:
+        os.makedirs(output_data_dir)
 
-    if verbose:
-        debug_train_inds = np.arange(NUM_CIFAR10_TRAIN)  # check how many inds covered
-        debug_test_inds = np.arange(NUM_CIFAR10_TEST)
+    NUM_SAMPLES1CLASS = 5000    
+    num_clients1class = num_clients // NUM_CIFAR10_CLASSES
 
-    current_inds = {  # log pointer to inds
-        'train': [0 for _ in range(NUM_CIFAR10_CLASSES)],
-        'test': [0 for _ in range(NUM_CIFAR10_CLASSES)]
-    }
+    train_set = torchvision.datasets.CIFAR10(root=raw_data_dir, train=True, download=True, transform=transform)
 
-    groups = []
-    for it_sum in range(num_types):
-        inds_this = {'train': [], 'test': []}
-        for i in range(num_classes1group):
-            # we process class ci in this iteration
-            # c0 = 0 c1 = 0 c2 = 0 -> c0 = 1 c1 = 0 c2 = 0 -> c0 = 2 c1 = 0 c2 = 0
-            ci = floor((it_sum % (NUM_CIFAR10_CLASSES ** (i + 1))) / (NUM_CIFAR10_CLASSES ** i))
+    inds = partition_class(train_set)
 
-            inds_this['train'].extend(inds['train'][ci][current_inds['train'][ci]:
-                                                        current_inds['train'][ci] +
-                                                        num_samples1group1class['train']])
-            inds_this['test'].extend(inds['test'][ci][current_inds['test'][ci]:
-                                                      current_inds['test'][ci] +
-                                                      num_samples1group1class['test']])
-            # update pointer
-            current_inds['train'][ci] += num_samples1group1class['train']
-            current_inds['test'][ci] += num_samples1group1class['test']
-        inds_this['train'] = np.array(inds_this['train'])
-        inds_this['test'] = np.array(inds_this['test'])
-        if verbose:
-            debug_train_inds[inds_this['train']] = -1
-            debug_test_inds[inds_this['test']] = -1
-            print(f'debug_train_inds: {(debug_train_inds == -1).sum()}')
-            print(f'debug_test_inds: {(debug_test_inds == -1).sum()}')
-        groups.append(inds_this)
-    return groups
+    for class_ in range(NUM_CIFAR10_CLASSES):
+        # unbalance partition
+        while True:
+            num_samples_list = num_samples_base + np.random.randn(num_clients1class)
+            num_samples_list[num_samples_list < num_samples_base - num_samples_clamp_thres] = \
+                num_samples_base - num_samples_clamp_thres
+            num_samples_list[num_samples_list > num_samples_base + num_samples_clamp_thres] = \
+                num_samples_base + num_samples_clamp_thres
+            sum_weight = num_samples_list.sum()
+            num_samples_list /= sum_weight  # normalize
+
+            pre_weight = 0.0
+            accumulated = [0.0]
+            for end in range(num_clients1class):
+                pre_weight = pre_weight + num_samples_list[end]
+                accumulated.append(pre_weight)
+            accumulated[-1] = 1.0
+            accumulated = np.round(np.array(accumulated) * NUM_SAMPLES1CLASS).astype(int)
+
+            num_samples_list = [accumulated[i + 1] - accumulated[i] for i in range(num_clients1class)]
+            num_samples_list = np.array(num_samples_list)
+            if (num_samples_list <= 0).sum() == 0:
+                break
+            else:
+                print(f'In class {class_}, client with no data exists, retrying...')
+
+        start_train = 0
+        for worker_ind in range(num_clients1class):
+            worker_identifier = worker_ind + num_clients1class * class_
+            worker_dir = osp.join(output_data_dir, str(worker_identifier))
+            os.makedirs(worker_dir)
+
+            num_train_samples = num_samples_list[worker_ind]
+
+            for ind in inds[class_][start_train: start_train + num_train_samples]:
+                data = train_set[ind]
+                with open(osp.join(worker_dir, str(ind)), 'wb') as f:
+                    pkl.dump(data, f)
+
+            start_train += num_train_samples
+
+
+def _test():
+    partition(num_clients=100, output_data_dir=osp.join('data', 'debug100-1'))
+
+
+if __name__ == '__main__':
+    _test()

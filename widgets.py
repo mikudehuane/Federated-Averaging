@@ -52,10 +52,9 @@ def aggregate_model(global_model, local_model, global_weight, local_weight):
     :param local_model:
     :return:
     """
-    local_model_parameters = list(local_model.parameters())
     for ind, par in enumerate(global_model.parameters()):
         par.data *= global_weight
-        par.data.add_(local_model_parameters[ind].data * local_weight)
+        par.data.add_(local_model[ind].data * local_weight)
 
 
 def clamp(number, low, high):

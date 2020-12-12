@@ -7,11 +7,11 @@ from torchvision import transforms
 cifar10_classes = ('plane', 'car', 'bird', 'cat',
                    'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-data_dir = osp.join(osp.join('D:\\', 'Projects', 'data'))
+data_dir = osp.join(osp.join('/root/last-avg/data'))
 cache_dir = 'cache'
 os.makedirs(cache_dir, exist_ok=True)
 
-use_cuda = True
+use_cuda = torch.cuda.is_available()
 device = torch.device('cuda') if use_cuda else torch.device('cpu')
 
 transform = transforms.Compose(

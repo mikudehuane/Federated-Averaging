@@ -1,6 +1,5 @@
-# Federated-Averaging
-A simulation of federated learning setting and implementation of FedAvg
+Adjust parameters in partition.py to adjust Non-IID and unbalanced data partition
 
-Modify parameters in simulator.py and run it.
+Adjust parameters in trainer.py to train with FedAvg
 
-Data are partitioned Non-IID and unbalanced.
+*** Aggregating use weight 1/num_clients1round because local update is with unit epoch

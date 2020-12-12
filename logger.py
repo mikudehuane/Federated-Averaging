@@ -23,11 +23,8 @@ class Logger:
 
         self.summaryWriter = SummaryWriter(log_dir=self.tb_dir)
 
-    def add_train_loss(self, loss, it_num, tag):
-        self.summaryWriter.add_scalar(tag + "-training loss", loss, it_num)
-
-    def add_test_acc(self, acc, it_num, tag):
-        self.summaryWriter.add_scalar(tag + "-test Accuracy", acc, it_num)
+    def add_scalar(self, tag, value, it_num):
+        self.summaryWriter.add_scalar(tag, value, it_num)
 
     def add_meta_data(self, pars, tag):
         with open(osp.join(self.other_dir, 'parameters.txt'), 'a') as f:
