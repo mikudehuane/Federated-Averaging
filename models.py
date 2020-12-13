@@ -5,8 +5,6 @@
 from torch import nn
 import torch.nn.functional as F
 
-from common import NUM_CIFAR10_CLASSES
-
 
 class MLP(nn.Module):
     def __init__(self, dim_in, dim_hidden, dim_out):
@@ -69,14 +67,14 @@ class CNNFashion_Mnist(nn.Module):
 
 
 class CNNCifar(nn.Module):
-    def __init__(self):
+    def __init__(self, args):
         super(CNNCifar, self).__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, NUM_CIFAR10_CLASSES)
+        self.fc3 = nn.Linear(84, args.num_classes)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))

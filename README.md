@@ -1,6 +1,6 @@
 # Federated-Averaging
-A simulation of federated learning setting and implementation of FedAvg
+An implementation of [semi-cyclic SGD](https://arxiv.org/pdf/1904.10120.pdf).
 
-Modify parameters in simulator.py and run it.
+The data distribution of each client varies periodically with time.
 
-Data are partitioned Non-IID and unbalanced.
+A model is associated with each block.
